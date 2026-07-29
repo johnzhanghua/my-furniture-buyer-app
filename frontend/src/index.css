@@ -230,6 +230,151 @@ button.link-button {
   font-size: 0.875rem;
 }
 
+/* ---------- assistant ---------- */
+
+.assistant {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.assistant-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.assistant-row {
+  display: flex;
+  gap: 0.625rem;
+}
+
+.assistant-row input {
+  flex: 1;
+}
+
+.assistant-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.chip {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.chip:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+
+/* ---------- purchase confirmation ---------- */
+
+.confirm-panel {
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.875rem 1rem;
+  margin-bottom: 1rem;
+  background: var(--bg);
+}
+
+.confirm-title {
+  margin: 0 0 0.625rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.confirm-figures {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+}
+
+.confirm-figures > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.1875rem 0;
+}
+
+.confirm-figures dt {
+  color: var(--muted);
+}
+
+.confirm-figures dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.confirm-prompt {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.assistant-earlier {
+  list-style: none;
+  margin: 0.875rem 0 0;
+  padding: 0 0 0 0.75rem;
+  border-left: 2px solid var(--line);
+  font-size: 0.8125rem;
+}
+
+.assistant-earlier li {
+  padding: 0.125rem 0;
+}
+
+.assistant-answer {
+  margin-top: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.875rem;
+}
+
+.assistant-steps {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  font-size: 0.8125rem;
+}
+
+.assistant-steps li::before {
+  content: "· ";
+}
+
+.assistant-reply {
+  margin: 0 0 1rem;
+  /* The model replies in plain prose; keep its paragraph breaks. */
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+/* Slightly narrower than the catalogue grid — these are a shortlist, not a
+   browse surface, so they shouldn't dominate the page. */
+.assistant-grid {
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  margin-bottom: 1rem;
+}
+
+.assistant-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.assistant-reason {
+  margin: 0;
+  padding-left: 0.125rem;
+  line-height: 1.45;
+}
+
 .toolbar {
   display: flex;
   gap: 0.75rem;
@@ -259,11 +404,27 @@ button.link-button {
   flex-direction: column;
 }
 
+/* Fixed frame so the grid doesn't reflow as lazy-loaded photos arrive. */
+.card-image-frame {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
 .card-image {
   width: 100%;
-  aspect-ratio: 3 / 2;
-  object-fit: cover;
-  background: var(--line);
+  height: 100%;
+  /* `contain`, not `cover`: catalogue shots are square product photos on white,
+     and cropping them cuts the furniture off. */
+  object-fit: contain;
+}
+
+.card-image-fallback {
+  font-size: 0.8125rem;
 }
 
 .card-body {

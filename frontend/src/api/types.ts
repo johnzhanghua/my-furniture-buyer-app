@@ -57,6 +57,62 @@ export interface Order {
   timestamp: string | null;
 }
 
+/** One tool call the assistant made, for the "what it did" trace. */
+export interface AssistantStep {
+  tool: string;
+  input: Record<string, unknown>;
+  summary: string;
+  is_error: boolean;
+}
+
+/**
+ * A recommended product. The backend flattens the full catalogue record into
+ * this, so it renders with the same card as the grid — image, price and Buy
+ * button included — rather than as a line of text.
+ */
+export type Recommendation = Product & { reason: string };
+
+/**
+ * A purchase the assistant wants to make. **Nothing has been charged yet** —
+ * the order is placed by the normal buy endpoint, and only when the user
+ * clicks Confirm.
+ */
+export type PendingPurchase = Product & {
+  quantity: number;
+  total_cents: number;
+  balance_cents: number;
+  balance_after_cents: number;
+  affordable: boolean;
+  /** Minted with the proposal, so a double-clicked Confirm can't charge twice. */
+  idempotency_key: string;
+};
+
+/** An order that actually went through, after the user replied "yes". */
+export interface ConfirmedOrder {
+  order_id: string;
+  product_name: string;
+  quantity: number;
+  total_cents: number;
+  remaining_balance_cents: number;
+}
+
+/** One earlier turn, replayed so the assistant can resolve "the third one". */
+export interface HistoryTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
+export interface AssistantAnswer {
+  summary: string;
+  recommendations: Recommendation[];
+  pending_purchase: PendingPurchase | null;
+  order_placed: ConfirmedOrder | null;
+  /** Digest of this turn — send it back as the assistant's history entry. */
+  transcript: string;
+  steps: AssistantStep[];
+  model: string;
+}
+
 /** Matches the `{ error, message }` body every failing endpoint returns. */
 export type ApiErrorCode =
   | "bad_request"

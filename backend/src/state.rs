@@ -1,5 +1,6 @@
 use sqlx::SqlitePool;
 
+use crate::agent::Agent;
 use crate::config::Config;
 use crate::external_api::ExternalApiClient;
 
@@ -9,4 +10,5 @@ pub struct AppState {
     pub pool: SqlitePool,
     pub config: Config,
     pub external_api: ExternalApiClient,
+    pub agent: Agent,
 }

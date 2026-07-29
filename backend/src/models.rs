@@ -66,7 +66,7 @@ pub struct LoginRequest {
 // no float crosses into the rest of the app or out to the browser.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct CatalogueProduct {
     pub item_id: String,
     pub product_name: String,

@@ -231,21 +231,61 @@ impl ExternalApiClient {
         self.send(req, "/orders").await
     }
 
+    /// Raw image bytes for a product, with the content type upstream reported.
+    ///
+    /// `search-index` never carries images, so the grid cannot render them from
+    /// the listing; this is proxied per product instead. Upstream currently
+    /// serves it unauthenticated, but going through here means the browser
+    /// stays on one origin and nothing breaks if that changes.
+    pub async fn product_image(&self, item_id: &str) -> Result<(Vec<u8>, String), ApiError> {
+        let path = format!("/catalogue/{item_id}/image");
+        let response = self
+            .request(reqwest::Method::GET, &path)?
+            .send()
+            .await
+            .map_err(|e| Self::transport_error(&path, e))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(Self::map_error(&path, status, &body));
+        }
+
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("image/jpeg")
+            .to_string();
+
+        let bytes = response.bytes().await.map_err(|e| {
+            log::error!("upstream {path} image body failed: {e}");
+            ApiError::Upstream("the furniture shop returned an unreadable image".into())
+        })?;
+
+        Ok((bytes.to_vec(), content_type))
+    }
+
     // -- plumbing -----------------------------------------------------------
+
+    fn transport_error(path: &str, e: reqwest::Error) -> ApiError {
+        log::error!("upstream {path} request failed: {e}");
+        if e.is_timeout() {
+            ApiError::Upstream("the furniture shop API timed out".into())
+        } else {
+            ApiError::Upstream("could not reach the furniture shop API".into())
+        }
+    }
 
     async fn send<T: serde::de::DeserializeOwned>(
         &self,
         req: reqwest::RequestBuilder,
         path: &str,
     ) -> Result<T, ApiError> {
-        let response = req.send().await.map_err(|e| {
-            log::error!("upstream {path} request failed: {e}");
-            if e.is_timeout() {
-                ApiError::Upstream("the furniture shop API timed out".into())
-            } else {
-                ApiError::Upstream("could not reach the furniture shop API".into())
-            }
-        })?;
+        let response = req
+            .send()
+            .await
+            .map_err(|e| Self::transport_error(path, e))?;
 
         let status = response.status();
         if !status.is_success() {

@@ -1,3 +1,4 @@
+pub mod assistant;
 pub mod auth;
 pub mod me;
 pub mod orders;
@@ -21,10 +22,12 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                     .route("/balance", web::get().to(me::balance)),
             )
             .route("/categories", web::get().to(products::categories))
+            .service(web::scope("/assistant").route("/ask", web::post().to(assistant::ask)))
             .service(
                 web::scope("/products")
                     .route("", web::get().to(products::list))
-                    .route("/{id}", web::get().to(products::detail)),
+                    .route("/{id}", web::get().to(products::detail))
+                    .route("/{id}/image", web::get().to(products::image)),
             )
             .service(
                 web::scope("/orders")

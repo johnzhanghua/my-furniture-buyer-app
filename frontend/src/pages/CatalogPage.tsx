@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, api, newIdempotencyKey } from "../api/client";
 import type { Order, Product } from "../api/types";
+import { AssistantBox } from "../components/AssistantBox";
 import { ProductCard } from "../components/ProductCard";
 import { formatCents } from "../lib/format";
 import { useAuth } from "../state/AuthContext";
@@ -128,6 +129,15 @@ export function CatalogPage() {
 
   return (
     <section>
+      {/* Shares the catalogue's buy handler, so a card the assistant surfaces
+          behaves exactly like one in the grid below. */}
+      <AssistantBox
+        buyingId={buyingId}
+        balanceCents={balance ? balanceCents : null}
+        onBuy={handleBuy}
+        onBalanceChanged={setBalanceCents}
+      />
+
       <div className="toolbar">
         <input
           type="search"

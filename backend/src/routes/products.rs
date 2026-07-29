@@ -89,3 +89,19 @@ pub async fn detail(
     let product = state.external_api.product(&path.into_inner()).await?;
     Ok(HttpResponse::Ok().json(CatalogueProduct::from(product)))
 }
+
+/// Streams a product photo. The browser points `<img src>` straight here, so
+/// the key never leaves the server and the image is cached like any other
+/// static asset.
+pub async fn image(
+    state: web::Data<AppState>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    let (bytes, content_type) = state.external_api.product_image(&path.into_inner()).await?;
+
+    Ok(HttpResponse::Ok()
+        .content_type(content_type)
+        // Catalogue photos don't change; let the browser keep them for a day.
+        .insert_header(("Cache-Control", "public, max-age=86400"))
+        .body(bytes))
+}

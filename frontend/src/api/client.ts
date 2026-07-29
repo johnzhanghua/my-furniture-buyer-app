@@ -1,8 +1,11 @@
 import type {
   ApiErrorCode,
+  AssistantAnswer,
   AuthResponse,
   Balance,
+  HistoryTurn,
   Order,
+  PendingPurchase,
   Product,
   User,
 } from "./types";
@@ -43,6 +46,14 @@ let onUnauthorized: () => void = () => {};
 
 export function setUnauthorizedHandler(handler: () => void): void {
   onUnauthorized = handler;
+}
+
+/**
+ * Photo for a product, served by our backend rather than upstream directly —
+ * same origin, and the API key stays server-side. Safe to use as an `<img src>`.
+ */
+export function productImageUrl(itemId: string): string {
+  return `${BASE_URL}/products/${encodeURIComponent(itemId)}/image`;
 }
 
 /** Stable id for one buy intent, so a retry cannot charge twice. */
@@ -138,4 +149,31 @@ export const api = {
     }),
 
   orders: () => request<Order[]>("/orders"),
+
+  /**
+   * Asks the shopping assistant a plain-English question.
+   *
+   * The assistant has no tool that spends money. When it wants to buy
+   * something the answer carries a `pending_purchase`; echo that back as
+   * `pending` on the next call so a reply of "yes" is read as confirming it.
+   */
+  ask: (
+    message: string,
+    pending?: PendingPurchase | null,
+    history: HistoryTurn[] = [],
+  ) =>
+    request<AssistantAnswer>("/assistant/ask", {
+      method: "POST",
+      body: JSON.stringify({
+        message,
+        history,
+        pending: pending
+          ? {
+              item_id: pending.item_id,
+              quantity: pending.quantity,
+              idempotency_key: pending.idempotency_key,
+            }
+          : null,
+      }),
+    }),
 };

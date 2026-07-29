@@ -3,7 +3,24 @@ name = "furniture-buyer-api"
 version = "0.1.0"
 edition = "2021"
 
+# Two binaries share one library: the HTTP API the browser talks to, and an MCP
+# server exposing the same furniture-shop operations as agent tools. Both reuse
+# `external_api.rs`, so the upstream client is written and tested once.
+[lib]
+name = "furniture_buyer_api"
+path = "src/lib.rs"
+
+[[bin]]
+name = "furniture-buyer-api"
+path = "src/main.rs"
+
+[[bin]]
+name = "furniture-mcp"
+path = "src/bin/mcp.rs"
+
 [dependencies]
+rmcp = { version = "3", features = ["server", "macros", "transport-io"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std"] }
 actix-web = "4"
 actix-cors = "0.7"
 sqlx = { version = "0.8", default-features = false, features = [

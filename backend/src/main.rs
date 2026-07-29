@@ -1,18 +1,10 @@
-mod auth;
-mod config;
-mod db;
-mod error;
-mod external_api;
-mod models;
-mod routes;
-mod state;
-
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
 use actix_web::{web, App, HttpServer};
 
-use crate::config::Config;
-use crate::state::AppState;
+use furniture_buyer_api::config::Config;
+use furniture_buyer_api::state::AppState;
+use furniture_buyer_api::{db, external_api, routes};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -45,10 +37,24 @@ async fn main() -> std::io::Result<()> {
         log::warn!("upstream API not configured; set EXTERNAL_API_BASE_URL and EXTERNAL_API_KEY");
     }
 
+    let agent = furniture_buyer_api::agent::Agent::new(config.agent.clone())
+        .map_err(|e| std::io::Error::other(format!("assistant setup failed: {e}")))?;
+
+    if agent.is_configured() {
+        log::info!(
+            "assistant enabled: Azure OpenAI deployment {} at {}",
+            config.agent.deployment,
+            config.agent.endpoint
+        );
+    } else {
+        log::warn!("assistant disabled; set AZURE_OPENAI_API_KEY to enable /api/assistant/ask");
+    }
+
     let state = web::Data::new(AppState {
         pool,
         config: config.clone(),
         external_api,
+        agent,
     });
 
     log::info!("API listening on http://{}:{}", bind_addr.0, bind_addr.1);
