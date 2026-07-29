@@ -9,6 +9,45 @@ pub struct Config {
     pub jwt_ttl_hours: i64,
     pub cors_allowed_origins: Vec<String>,
     pub default_budget_cents: i64,
+    pub external_api: ExternalApiConfig,
+}
+
+/// Credentials and connection details for the hackathon's upstream API.
+///
+/// The header names are configurable because the lab guide is behind a login
+/// and the auth scheme has not been confirmed yet — if upstream expects
+/// `Authorization: Bearer …` instead, that is an `.env` change, not a code
+/// change. See `external_api.rs`.
+#[derive(Clone)]
+pub struct ExternalApiConfig {
+    pub base_url: String,
+    pub user_id: String,
+    pub api_key: String,
+    pub key_header: String,
+    pub user_header: String,
+    pub timeout_secs: u64,
+}
+
+impl ExternalApiConfig {
+    /// True once a base URL and key are present; handlers should treat a
+    /// half-configured upstream as "not available" rather than erroring late.
+    pub fn is_configured(&self) -> bool {
+        !self.base_url.is_empty() && !self.api_key.is_empty()
+    }
+}
+
+// Hand-written so the API key cannot reach a log line via `{:?}` on Config.
+impl std::fmt::Debug for ExternalApiConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExternalApiConfig")
+            .field("base_url", &self.base_url)
+            .field("user_id", &self.user_id)
+            .field("api_key", &"<redacted>")
+            .field("key_header", &self.key_header)
+            .field("user_header", &self.user_header)
+            .field("timeout_secs", &self.timeout_secs)
+            .finish()
+    }
 }
 
 impl Config {
@@ -29,6 +68,18 @@ impl Config {
             .filter(|s| !s.is_empty())
             .collect(),
             default_budget_cents: parse_or("DEFAULT_BUDGET_CENTS", 500_000),
+            external_api: ExternalApiConfig {
+                // Trailing slashes are trimmed so paths can be joined as
+                // `{base}/{path}` without producing a double slash.
+                base_url: var_or("EXTERNAL_API_BASE_URL", "")
+                    .trim_end_matches('/')
+                    .to_string(),
+                user_id: var_or("EXTERNAL_API_USER_ID", ""),
+                api_key: var_or("EXTERNAL_API_KEY", ""),
+                key_header: var_or("EXTERNAL_API_KEY_HEADER", "X-API-Key"),
+                user_header: var_or("EXTERNAL_API_USER_HEADER", "X-User-Id"),
+                timeout_secs: parse_or("EXTERNAL_API_TIMEOUT_SECS", 10),
+            },
         }
     }
 }

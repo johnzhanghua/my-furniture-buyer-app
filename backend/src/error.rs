@@ -35,6 +35,11 @@ pub enum ApiError {
         available: i64,
     },
 
+    /// A dependency failed, not us. Kept distinct from `Internal` so an
+    /// upstream outage is diagnosable from the status code alone.
+    #[error("{0}")]
+    Upstream(String),
+
     #[error("something went wrong")]
     Database(#[from] sqlx::Error),
 
@@ -54,6 +59,7 @@ impl ApiError {
             ApiError::Conflict(_) => "conflict",
             ApiError::InsufficientBudget { .. } => "insufficient_budget",
             ApiError::InsufficientStock { .. } => "insufficient_stock",
+            ApiError::Upstream(_) => "upstream_error",
             ApiError::Database(_) | ApiError::Internal(_) => "internal",
         }
     }
@@ -76,6 +82,7 @@ impl ResponseError for ApiError {
             ApiError::InsufficientBudget { .. } | ApiError::InsufficientStock { .. } => {
                 StatusCode::UNPROCESSABLE_ENTITY
             }
+            ApiError::Upstream(_) => StatusCode::BAD_GATEWAY,
             ApiError::Database(_) | ApiError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

@@ -2,6 +2,7 @@ mod auth;
 mod config;
 mod db;
 mod error;
+mod external_api;
 mod models;
 mod routes;
 mod state;
@@ -31,9 +32,23 @@ async fn main() -> std::io::Result<()> {
     let bind_addr = (config.host.clone(), config.port);
     let allowed_origins = config.cors_allowed_origins.clone();
 
+    let external_api = external_api::ExternalApiClient::new(config.external_api.clone())
+        .map_err(|e| std::io::Error::other(format!("HTTP client setup failed: {e}")))?;
+
+    if external_api.is_configured() {
+        log::info!(
+            "upstream API configured at {} as user {}",
+            config.external_api.base_url,
+            config.external_api.user_id
+        );
+    } else {
+        log::warn!("upstream API not configured; set EXTERNAL_API_BASE_URL and EXTERNAL_API_KEY");
+    }
+
     let state = web::Data::new(AppState {
         pool,
         config: config.clone(),
+        external_api,
     });
 
     log::info!("API listening on http://{}:{}", bind_addr.0, bind_addr.1);

@@ -53,7 +53,8 @@ no admin, staff, or supplier actor in this build.
 | FR-2.3 | A buyer can filter by category. | Built |
 | FR-2.4 | Search and filter combine (logical AND). | Built |
 | FR-2.5 | The catalogue is readable without authentication; ordering is not. | Built (deliberate — see DD-6) |
-| FR-2.6 | The shop is seeded with a representative catalogue for demo purposes. | Built (16 products, 7 categories) |
+| FR-2.6 | The shop is seeded with a representative catalogue for demo purposes. | Built (12 products, 5 categories) |
+| FR-2.6a | **The catalogue carries furniture only.** Lighting fixtures, rugs, mirrors, and other decor or soft furnishings are out of scope. | Built (enforced by seed data, not by schema — see LIM-9) |
 | FR-2.7 | Products display a per-item indication of whether they are affordable within the remaining budget. | Built |
 | FR-2.8 | Catalogue pagination. | Gap (see LIM-6) |
 | FR-2.9 | Product creation / editing by staff. | Out |
@@ -196,17 +197,33 @@ Accepted for Day 1, listed so they are not mistaken for oversights.
   but readable by any injected script. A cookie-based session would be the
   correct choice outside a hackathon.
 - **LIM-6 — No pagination.** `/api/products` and `/api/orders` return everything.
-  Fine at 16 products; not at 16,000.
+  Fine at 12 products; not at 16,000.
 - **LIM-7 — Single-writer database.** SQLite serialises writes. Concurrent
   checkout is correct but not fast, and is untested under load.
 - **LIM-8 — Budget is recomputed by aggregation.** Remaining budget is a `SUM`
   over the orders table on every read rather than a stored balance. Simple and
   always consistent; it will need a materialised balance if order volume grows.
+- **LIM-9 — "Furniture only" is a data convention, not a constraint.** FR-2.6a is
+  enforced by what the seed migrations leave in the `products` table. Nothing in
+  the schema stops a non-furniture `category` being inserted later. A `CHECK`
+  constraint would need a SQLite table rebuild and would turn adding a
+  legitimate new furniture category into a migration; not worth it at this size.
 
 ## Verification status
 
-**Nothing in this repository has been compiled or executed.** Neither the Rust
-toolchain nor Node.js is installed on the machine where it was written, so
-`cargo check` and `npm run typecheck` have not been run and the acceptance
-script in §5 has not been performed. Treat every "Built" status above as
-*written and reviewed, not yet proven*.
+Partially verified, as of the last update to this document:
+
+| Check | Status |
+| --- | --- |
+| `cargo check` (backend compiles) | Passes — one dead-code warning on `AuthUser::email` |
+| `cargo fmt` | Applied |
+| `npm run typecheck` | Passes |
+| `npm run build` (production bundle) | Passes |
+| `npm run dev` (dev server serves) | Passes |
+| Catalogue restricted to furniture (FR-2.6a) | Verified against a copy of a live database: 16 products/7 categories → 12/5, and the delete guard leaves an already-ordered product in place |
+| **Acceptance script (§5)** | **Not run** |
+| **Budget and stock enforcement (BR-1…BR-3)** | **Not exercised at runtime** |
+
+The two rules the product exists to enforce have been written and reviewed but
+never executed. Until §5 steps 7–10 are run against a live API, treat BR-1
+through BR-3 as *unproven*.

@@ -2,6 +2,7 @@ pub mod auth;
 pub mod me;
 pub mod orders;
 pub mod products;
+pub mod upstream;
 
 use actix_web::{web, HttpResponse};
 
@@ -29,6 +30,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                     .route("", web::post().to(orders::create))
                     .route("", web::get().to(orders::list))
                     .route("/{id}", web::get().to(orders::detail)),
+            )
+            .service(
+                web::scope("/upstream").route("/status", web::get().to(upstream::status)),
             ),
     );
 }
