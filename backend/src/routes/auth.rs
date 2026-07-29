@@ -5,7 +5,7 @@ use crate::error::ApiError;
 use crate::models::{AuthResponse, LoginRequest, RegisterRequest, User, UserResponse};
 use crate::state::AppState;
 
-const USER_COLUMNS: &str = "id, email, display_name, password_hash, budget_cents, created_at";
+const USER_COLUMNS: &str = "id, email, display_name, password_hash, created_at";
 
 pub async fn register(
     state: web::Data<AppState>,
@@ -43,17 +43,17 @@ pub async fn register(
 
     let id = uuid::Uuid::new_v4().to_string();
     let created_at = chrono::Utc::now().to_rfc3339();
-    let budget_cents = state.config.default_budget_cents;
 
+    // No budget column is written: spending power comes from the furniture
+    // shop's ledger, not from us.
     sqlx::query(
-        "INSERT INTO users (id, email, display_name, password_hash, budget_cents, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO users (id, email, display_name, password_hash, created_at)
+         VALUES (?, ?, ?, ?, ?)",
     )
     .bind(id.as_str())
     .bind(email.as_str())
     .bind(display_name.as_str())
     .bind(hash_password(&body.password)?)
-    .bind(budget_cents)
     .bind(created_at.as_str())
     .execute(&state.pool)
     .await?;
@@ -71,7 +71,6 @@ pub async fn register(
             id,
             email,
             display_name,
-            budget_cents,
             created_at,
         },
     }))

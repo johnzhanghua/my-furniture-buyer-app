@@ -52,6 +52,16 @@ a {
   font-size: 0.875rem;
 }
 
+.notice {
+  color: #1f5d3a;
+  background: #e8f4ec;
+  border: 1px solid #bcdcc8;
+  border-radius: 6px;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  margin: 0 0 1rem;
+}
+
 .numeric {
   text-align: right;
   font-variant-numeric: tabular-nums;

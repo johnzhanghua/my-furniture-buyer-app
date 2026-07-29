@@ -1,64 +1,91 @@
 use actix_web::{web, HttpResponse};
 
 use crate::error::ApiError;
-use crate::models::{Product, ProductQuery};
+use crate::external_api::{to_cents, UpstreamProduct};
+use crate::models::{CatalogueProduct, CatalogueQuery};
 use crate::state::AppState;
 
-const PRODUCT_COLUMNS: &str = "id, sku, name, description, category, price_cents, stock, image_url";
+/// Upstream caps `limit` at 1000 and the catalogue is 762 items, so one request
+/// fetches everything. That is what makes local text search below viable — if
+/// the catalogue outgrows the cap this needs real pagination.
+const CATALOGUE_LIMIT: u32 = 1000;
+
+impl From<UpstreamProduct> for CatalogueProduct {
+    fn from(p: UpstreamProduct) -> Self {
+        CatalogueProduct {
+            item_id: p.item_id,
+            product_name: p.product_name,
+            price_cents: to_cents(p.price),
+            category: p.category,
+            width: p.width,
+            height: p.height,
+            depth: p.depth,
+            colours: p.colours.unwrap_or_default(),
+            // Upstream puts raw base64 image data in `image_url` on the detail
+            // endpoint. Wrap it as a data URI so an <img src> actually works;
+            // pass through anything that is already a real URL.
+            image_url: match (p.image_url, p.image_mime_type) {
+                (Some(data), _) if data.starts_with("http") || data.starts_with("data:") => {
+                    Some(data)
+                }
+                (Some(data), Some(mime)) => Some(format!("data:{mime};base64,{data}")),
+                (Some(data), None) => Some(format!("data:image/jpeg;base64,{data}")),
+                (None, _) => None,
+            },
+            link: p.link,
+        }
+    }
+}
 
 pub async fn list(
     state: web::Data<AppState>,
-    query: web::Query<ProductQuery>,
+    query: web::Query<CatalogueQuery>,
 ) -> Result<HttpResponse, ApiError> {
-    let search = query
-        .search
-        .as_ref()
-        .map(|s| s.trim().to_lowercase())
-        .filter(|s| !s.is_empty());
+    let query = query.into_inner();
     let category = query
         .category
-        .as_ref()
-        .map(|c| c.trim().to_string())
+        .as_deref()
+        .map(str::trim)
         .filter(|c| !c.is_empty());
+    let search = query
+        .search
+        .as_deref()
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| !s.is_empty());
 
-    let mut sql = format!("SELECT {PRODUCT_COLUMNS} FROM products WHERE 1 = 1");
-    if search.is_some() {
-        sql.push_str(" AND (LOWER(name) LIKE ? OR LOWER(description) LIKE ? OR LOWER(sku) LIKE ?)");
-    }
-    if category.is_some() {
-        sql.push_str(" AND category = ?");
-    }
-    sql.push_str(" ORDER BY category ASC, name ASC");
+    // Category filtering is pushed upstream; free-text is not, because
+    // search-index has no text parameter.
+    let products = state
+        .external_api
+        .search_index(category, CATALOGUE_LIMIT, 0)
+        .await?;
 
-    let mut stmt = sqlx::query_as::<_, Product>(&sql);
-    if let Some(term) = &search {
-        let pattern = format!("%{term}%");
-        stmt = stmt
-            .bind(pattern.clone())
-            .bind(pattern.clone())
-            .bind(pattern);
-    }
-    if let Some(category) = &category {
-        stmt = stmt.bind(category.as_str());
-    }
+    let products: Vec<CatalogueProduct> = products
+        .into_iter()
+        .map(CatalogueProduct::from)
+        .filter(|p| match &search {
+            None => true,
+            Some(term) => {
+                p.product_name.to_lowercase().contains(term)
+                    || p.item_id.to_lowercase().contains(term)
+                    || p.category
+                        .as_deref()
+                        .is_some_and(|c| c.to_lowercase().contains(term))
+            }
+        })
+        .collect();
 
-    let products = stmt.fetch_all(&state.pool).await?;
     Ok(HttpResponse::Ok().json(products))
+}
+
+pub async fn categories(state: web::Data<AppState>) -> Result<HttpResponse, ApiError> {
+    Ok(HttpResponse::Ok().json(state.external_api.categories().await?))
 }
 
 pub async fn detail(
     state: web::Data<AppState>,
     path: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
-    let id = path.into_inner();
-
-    let product = sqlx::query_as::<_, Product>(&format!(
-        "SELECT {PRODUCT_COLUMNS} FROM products WHERE id = ?"
-    ))
-    .bind(id.as_str())
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| ApiError::NotFound(format!("no product with id {id}")))?;
-
-    Ok(HttpResponse::Ok().json(product))
+    let product = state.external_api.product(&path.into_inner()).await?;
+    Ok(HttpResponse::Ok().json(CatalogueProduct::from(product)))
 }

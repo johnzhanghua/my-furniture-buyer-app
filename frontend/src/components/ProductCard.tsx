@@ -3,54 +3,58 @@ import { formatCents } from "../lib/format";
 
 interface Props {
   product: Product;
-  inCart: number;
+  /** True while this product's own buy request is in flight. */
+  buying: boolean;
+  /** True while any buy is in flight — blocks starting a second one. */
+  anyBuying: boolean;
   affordable: boolean;
-  onAdd: (product: Product) => void;
+  onBuy: (product: Product) => void;
 }
 
-export function ProductCard({ product, inCart, affordable, onAdd }: Props) {
-  const soldOut = product.stock === 0;
-  const atStockLimit = inCart >= product.stock;
+export function ProductCard({
+  product,
+  buying,
+  anyBuying,
+  affordable,
+  onBuy,
+}: Props) {
+  // Disabled while in flight: the first half of double-click protection. The
+  // second half is the idempotency key sent with the request.
+  const disabled = anyBuying || !affordable;
 
   return (
     <article className="card">
-      <img
-        className="card-image"
-        src={product.image_url}
-        alt=""
-        loading="lazy"
-      />
-
       <div className="card-body">
         <div className="card-heading">
-          <h3>{product.name}</h3>
+          <h3>{product.product_name}</h3>
           <span className="price">{formatCents(product.price_cents)}</span>
         </div>
 
-        <p className="muted card-description">{product.description}</p>
-
         <div className="card-meta">
-          <span className="tag">{product.category}</span>
-          <span className="muted">
-            {soldOut ? "Out of stock" : `${product.stock} in stock`}
-          </span>
+          {product.category && <span className="tag">{product.category}</span>}
+          {product.colours.length > 0 && (
+            <span className="muted">{product.colours.join(", ")}</span>
+          )}
+        </div>
+
+        <div className="muted card-description">
+          {product.item_id}
+          {product.width && product.height
+            ? ` · ${product.width}×${product.height} cm`
+            : ""}
         </div>
 
         <button
           type="button"
           className="primary"
-          disabled={soldOut || atStockLimit || !affordable}
-          onClick={() => onAdd(product)}
+          disabled={disabled}
+          onClick={() => onBuy(product)}
         >
-          {soldOut
-            ? "Out of stock"
-            : atStockLimit
-              ? "All stock in cart"
-              : !affordable
-                ? "Over budget"
-                : inCart > 0
-                  ? `In cart (${inCart}) — add another`
-                  : "Add to cart"}
+          {buying
+            ? "Placing order…"
+            : !affordable
+              ? "Over balance"
+              : `Buy for ${formatCents(product.price_cents)}`}
         </button>
       </div>
     </article>

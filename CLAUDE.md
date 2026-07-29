@@ -4,156 +4,159 @@ Guidance for Claude Code when working in this repository.
 
 ## What this project is
 
-A buyer-facing web app for a furniture shop, built for a one-day hackathon.
+A buyer-facing web app for a furniture shop, built for a one-day hackathon
+(Day 1, Step 5: "Connect Your App to the API").
 
-The core loop is deliberately small:
+A buyer logs in, browses the shop's catalogue, and buys items against a real
+balance. The loop is: **log in → browse → click Buy → balance goes down.**
 
-1. A buyer **logs in**.
-2. They **browse a product catalogue** (search + filter by category).
-3. They add items to a cart and **place an order against a spending budget**.
+## The most important thing to know
 
-Every buyer has a fixed budget. An order is rejected if its total would push the
-buyer over their remaining budget, or if any line item exceeds available stock.
-Budget enforcement is the central business rule — it lives in the backend and is
-only *mirrored* in the UI for feedback.
+**The furniture shop API is the source of truth for catalogue, balance, and
+orders. Our SQLite database holds login accounts and nothing else.**
+
+There is no local product table in use, no local budget, no local order
+history, and no local stock. Earlier versions of this app enforced a budget in
+a local transaction; that is gone. If you find yourself writing money logic in
+this codebase, stop — it belongs upstream.
+
+Upstream: `https://day1.training.cognitivo.com.au`, authenticated with a single
+`X-Api-Key` header. Full spec at `/openapi.json`, human docs at `/docs`.
+
+### One upstream account, many local logins
+
+The app holds one participant `user_id` and one API key. Every local login
+shares that one upstream balance and order history — signing in as a different
+local user does not give you a different wallet. This is a lab constraint, not
+a design goal; don't build per-user budgets on top of it.
 
 ## Repository layout
 
 ```
-my-furniture-buyer-app/
-├── CLAUDE.md            ← this file
-├── backend/             ← Rust API (Actix-web + SQLx + SQLite)
-│   ├── migrations/      ← SQLx migrations, applied automatically on boot
-│   └── src/
-│       ├── main.rs      ← server bootstrap, CORS, route registration
-│       ├── config.rs    ← env-driven configuration
-│       ├── state.rs     ← AppState (pool + config), shared via web::Data
-│       ├── db.rs        ← pool setup, migration run, demo-user seeding
-│       ├── auth.rs      ← Argon2 hashing, JWT encode/decode, AuthUser extractor
-│       ├── error.rs     ← ApiError + ResponseError impl (uniform JSON errors)
-│       ├── models.rs    ← DB row structs and API DTOs
-│       └── routes/      ← auth.rs, products.rs, orders.rs, me.rs
-└── frontend/            ← React + TypeScript SPA (Vite)
-    └── src/
-        ├── api/         ← typed fetch client + shared API types
-        ├── state/       ← AuthContext, CartContext
-        ├── components/  ← Layout, ProtectedRoute, ProductCard
-        ├── pages/       ← Login, Catalog, Cart, Orders
-        └── lib/         ← formatting helpers
+backend/                  Rust API (Actix-web + SQLx + SQLite)
+  migrations/             schema for local accounts; applied on boot
+  src/
+    main.rs               bootstrap, CORS, route registration
+    config.rs             env-driven config, incl. upstream credentials
+    state.rs              AppState: pool + config + upstream client
+    db.rs                 pool setup, migrations, demo-account seeding
+    auth.rs               Argon2 hashing, JWT, AuthUser extractor
+    error.rs              ApiError + status/code mapping
+    external_api.rs       ★ the furniture shop client — all upstream calls
+    models.rs             local account types + upstream-backed DTOs
+    routes/               auth.rs, me.rs, products.rs, orders.rs, upstream.rs
+frontend/                 React + TypeScript SPA (Vite)
+  src/api/                typed fetch client + shared types
+  src/state/              AuthContext (session + balance)
+  src/components/         Layout, ProtectedRoute, ProductCard
+  src/pages/              Login, Catalog, Orders
 ```
 
 ## Running it
 
-Prerequisites: Rust (stable, via rustup) and Node 20+. **Neither is currently
-installed on this machine** — install both before attempting to build.
-
 ```bash
-# terminal 1 — API on http://127.0.0.1:8080
-cd backend
-cp .env.example .env
-cargo run
+cd backend  && cp .env.example .env   # then add the real credentials
+cargo run                             # http://127.0.0.1:8080
 
-# terminal 2 — UI on http://localhost:5173
-cd frontend
-cp .env.example .env
-npm install
-npm run dev
+cd frontend && cp .env.example .env
+npm install && npm run dev            # http://localhost:5173
 ```
 
-The SQLite file (`backend/furniture.db`) is created on first run, migrations are
-applied, and a demo buyer is seeded:
+Local demo login: `buyer@example.com` / `password123`. That is a *login*, not a
+wallet — the balance shown comes from upstream.
 
-- email `buyer@example.com`
-- password `password123`
-- budget `$5,000.00`
-
-Vite proxies `/api` to the backend, so the browser sees a single origin in dev.
-
-Useful commands:
-
-```bash
-cd backend  && cargo check && cargo clippy && cargo fmt
-cd frontend && npm run typecheck && npm run build
-```
+Checks: `cargo check && cargo clippy && cargo fmt` · `npm run typecheck && npm run build`
 
 ## API surface
 
-All routes are under `/api`. Authenticated routes require
-`Authorization: Bearer <jwt>`.
+All routes under `/api`. Authenticated routes need `Authorization: Bearer <jwt>`.
 
-| Method | Path                 | Auth | Purpose                                  |
-| ------ | -------------------- | ---- | ---------------------------------------- |
-| POST   | `/api/auth/register` | no   | Create a buyer, returns token + user      |
-| POST   | `/api/auth/login`    | no   | Exchange credentials for a JWT            |
-| GET    | `/api/me`            | yes  | Current user profile                      |
-| GET    | `/api/me/budget`     | yes  | `{ budget, spent, remaining }` in cents   |
-| GET    | `/api/products`      | no   | Catalogue; `?search=` and `?category=`    |
-| GET    | `/api/products/{id}` | no   | Single product                            |
-| POST   | `/api/orders`        | yes  | Place an order (budget + stock enforced)  |
-| GET    | `/api/orders`        | yes  | Current user's orders, newest first       |
-| GET    | `/api/orders/{id}`   | yes  | One order, scoped to the current user     |
-| GET    | `/api/health`        | no   | Liveness probe                            |
+| Method | Path | Auth | Backed by |
+| --- | --- | --- | --- |
+| POST | `/api/auth/register` | no | local DB |
+| POST | `/api/auth/login` | no | local DB |
+| GET | `/api/me` | yes | local DB (identity only) |
+| GET | `/api/me/balance` | yes | upstream `GET /users/{user_id}` |
+| GET | `/api/categories` | no | upstream `GET /catalogue/categories` |
+| GET | `/api/products?search=&category=` | no | upstream `GET /catalogue/search-index` |
+| GET | `/api/products/{item_id}` | no | upstream `GET /catalogue/{item_id}` |
+| POST | `/api/orders` | yes | upstream `POST /orders` |
+| GET | `/api/orders` | yes | upstream `GET /orders/{user_id}` |
+| GET | `/api/upstream/status` | yes | diagnostic |
+| GET | `/api/health` | no | liveness |
 
-Errors are always JSON: `{ "error": "<machine_code>", "message": "<human text>" }`.
-Codes in use: `bad_request`, `unauthorized`, `invalid_credentials`, `not_found`,
-`conflict`, `insufficient_budget`, `insufficient_stock`, `internal`.
+Errors are always `{ "error": "<code>", "message": "<text>" }`. Codes:
+`bad_request`, `unauthorized`, `invalid_credentials`, `not_found`, `conflict`,
+`insufficient_balance`, `upstream_error`, `internal`.
 
 ## Conventions that matter
 
-**Money is always integer cents (`i64` / `number`), never floats.** Field names
-carry the unit — `price_cents`, `total_cents`, `remaining_cents`. Convert to a
-display string only at the very edge, via `formatCents` in
-`frontend/src/lib/format.ts`. Do not introduce a float or a decimal string for
-money anywhere in the stack.
+**Money is integer cents everywhere in this codebase.** Upstream speaks
+floating-point (`398.0`, `5000.0`). Conversion happens in exactly one place —
+`external_api::to_cents` — at the boundary, and only inbound. Order requests
+carry `item_id` and `quantity` only, so no amount is ever sent back upstream
+and there is no round trip to drift. Never let an `f64` past `external_api.rs`,
+and never introduce a float or decimal string for money in the frontend.
 
-**IDs are UUID v4 stored as `TEXT`.** Timestamps are RFC 3339 strings in UTC,
-also `TEXT`. This keeps SQLite type mapping trivial and makes lexicographic
-sorting on `created_at` correct.
+**Browse with `search-index`, not `/catalogue`.** The guide is explicit: the
+plain catalogue endpoint embeds images and is much slower. `search-index`
+supports `category`, `limit`, `skip` — but **no text search**, so free-text
+filtering happens in `routes/products.rs` after fetching. That is only viable
+because the catalogue is 762 items and upstream's `limit` cap is 1000. If it
+outgrows that, this needs real pagination.
 
-**SQLx runtime queries only — no `query!`/`query_as!` macros.** The compile-time
-macros need a live `DATABASE_URL` at build time, which breaks offline builds and
-CI. Use `sqlx::query_as::<_, T>(...)` with `#[derive(FromRow)]` and `.bind(...)`.
+**`image_url` from `/catalogue/{item_id}` is not a URL.** It is raw base64
+image data, with the type in `image_mime_type`. `CatalogueProduct::from` wraps
+it into a data URI. `search-index` returns null there, so listings have no
+images.
 
-**Order placement runs in a single transaction** (`routes/orders.rs`). It reads
-budget, sums prior non-cancelled orders, validates every line against stock and
-price, inserts the order and its items, and decrements stock — then commits.
-Any new invariant about ordering belongs inside that transaction, not in a
-handler prelude and definitely not in the frontend.
+**Every upstream failure maps through `external_api::map_error`.** That is the
+single place upstream status codes become ours: `402` → `insufficient_balance`,
+`404` → "this item is no longer available", `401/403` → `upstream_error`
+(our key is wrong — never surfaced as the *user's* auth problem). Add new
+mappings there, not in handlers.
 
-**Never trust client-supplied prices.** The request body carries only
-`product_id` and `quantity`; unit prices are re-read from the database and
-snapshotted onto `order_items.unit_price_cents` so historical orders survive
-price changes.
+**The upstream client does not follow redirects.** A `3xx` from an API usually
+means auth failed and you're being sent to a login page; following it disguises
+that as `200 OK` carrying HTML.
 
-**Auth**: Argon2id password hashes, HS256 JWTs with a 24h expiry. The
-`AuthUser` extractor (`auth.rs`) is the only way handlers should learn who the
-caller is — never read a user id from a path or body parameter.
+**Ordering is idempotent by key.** The browser generates an idempotency key per
+buy intent and the backend forwards it as `Idempotency-Key`; upstream returns
+the original result rather than charging twice. The Buy button is also disabled
+while its request is in flight. Both halves matter — keep them.
+
+**Auth**: Argon2id hashes, HS256 JWTs, 24h expiry. The `AuthUser` extractor is
+the only way a handler learns who is calling.
 
 ## Frontend notes
 
-- Routing via `react-router-dom`; `ProtectedRoute` redirects unauthenticated
-  users to `/login` and remembers the attempted path.
-- Auth token is persisted in `localStorage` under `fb.token` and installed into
-  the API client on boot. A `401` from any call clears it and bounces to login.
-- Cart lives in `CartContext`, persisted to `localStorage` under `fb.cart`. It
-  is purely client-side until `POST /api/orders`.
-- No component library and no CSS framework — a single `index.css` with plain
-  classes. Keep it that way unless the task explicitly asks otherwise; adding a
-  design system mid-hackathon is a poor trade.
-- State is React context + `fetch`. There is no TanStack Query / Redux, and
-  adding one is a deliberate decision, not a drive-by refactor.
+- Routing via `react-router-dom`; `ProtectedRoute` redirects to `/login`.
+- Token in `localStorage` under `fb.token`; a `401` from any call clears it.
+- **There is no cart.** Step 5 specifies a per-product Buy button, so ordering
+  is one product at a time. The backend's order endpoint takes a single item;
+  upstream itself accepts multiple lines if a cart is ever reinstated.
+- Balance lives in `AuthContext`. A successful order returns
+  `remaining_balance_cents`, which is applied directly rather than triggering
+  another round trip.
+- Buy failures are phrased in `buyErrorMessage` in `CatalogPage.tsx` — the one
+  place user-facing error wording lives. It switches on the error *code*, never
+  on message text.
+- No component library, no CSS framework, no data-fetching library. Keep it
+  that way unless asked.
+
+## Local database
+
+Only `users` is read or written. The `products`, `orders`, and `order_items`
+tables still exist from the pre-integration design and are **dead** — nothing
+queries them, and migration `…0002` still seeds a local catalogue that nothing
+reads. Left in place rather than dropped destructively; remove them with a new
+migration if the clutter becomes a problem. Never edit an applied migration —
+SQLx checksums them on boot.
 
 ## Hackathon guardrails
 
-This is a one-day build. When choosing between options, prefer the one that
-keeps the demo loop working. Concretely:
-
-- Don't swap SQLite for Postgres, add Docker, or introduce a message queue.
-  SQLx keeps a Postgres migration cheap *later* if it's ever needed.
-- Don't add a payment provider, shipping, or inventory reconciliation. Stock is
-  a plain counter.
-- SQLite is single-writer; concurrent checkout under load is out of scope.
-- Auth is intentionally minimal: no refresh tokens, no password reset, no email
-  verification. Say so rather than quietly building them.
-- Secrets come from `.env` (`JWT_SECRET`). `.env` is gitignored; `.env.example`
-  is committed and must stay in sync when a new variable is introduced.
+- Don't reintroduce local budget or stock enforcement.
+- Don't add Postgres, Docker, a queue, or a payment provider.
+- Don't guess upstream endpoints — read `/openapi.json`.
+- Secrets come from `.env` (gitignored). `.env.example` is committed and must
+  stay in sync when a variable is added.

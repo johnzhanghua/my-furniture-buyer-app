@@ -1,7 +1,7 @@
 import type {
   ApiErrorCode,
   AuthResponse,
-  Budget,
+  Balance,
   Order,
   Product,
   User,
@@ -43,6 +43,14 @@ let onUnauthorized: () => void = () => {};
 
 export function setUnauthorizedHandler(handler: () => void): void {
   onUnauthorized = handler;
+}
+
+/** Stable id for one buy intent, so a retry cannot charge twice. */
+export function newIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -103,7 +111,9 @@ export const api = {
 
   me: () => request<User>("/me"),
 
-  budget: () => request<Budget>("/me/budget"),
+  balance: () => request<Balance>("/me/balance"),
+
+  categories: () => request<string[]>("/categories"),
 
   products: (params: { search?: string; category?: string } = {}) => {
     const query = new URLSearchParams();
@@ -113,10 +123,18 @@ export const api = {
     return request<Product[]>(`/products${suffix ? `?${suffix}` : ""}`);
   },
 
-  placeOrder: (items: Array<{ product_id: string; quantity: number }>) =>
+  product: (itemId: string) =>
+    request<Product>(`/products/${encodeURIComponent(itemId)}`),
+
+  /** Places (and pays for) an order for a single product. */
+  buy: (itemId: string, quantity: number, idempotencyKey: string) =>
     request<Order>("/orders", {
       method: "POST",
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({
+        item_id: itemId,
+        quantity,
+        idempotency_key: idempotencyKey,
+      }),
     }),
 
   orders: () => request<Order[]>("/orders"),

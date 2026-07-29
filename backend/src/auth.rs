@@ -83,7 +83,6 @@ pub fn decode_token(token: &str, secret: &str) -> Result<Claims, ApiError> {
 #[derive(Debug, Clone)]
 pub struct AuthUser {
     pub id: String,
-    pub email: String,
 }
 
 impl FromRequest for AuthUser {
@@ -114,8 +113,5 @@ fn extract_auth_user(req: &HttpRequest) -> Result<AuthUser, ApiError> {
 
     let claims = decode_token(token, &state.config.jwt_secret)?;
 
-    Ok(AuthUser {
-        id: claims.sub,
-        email: claims.email,
-    })
+    Ok(AuthUser { id: claims.sub })
 }

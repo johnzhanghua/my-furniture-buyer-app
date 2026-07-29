@@ -22,23 +22,16 @@ pub enum ApiError {
     #[error("{0}")]
     Conflict(String),
 
-    #[error("order total of {total_cents} cents exceeds the remaining budget of {remaining_cents} cents")]
-    InsufficientBudget {
-        total_cents: i64,
-        remaining_cents: i64,
-    },
-
-    #[error("only {available} of \"{name}\" left in stock, {requested} requested")]
-    InsufficientStock {
-        name: String,
-        requested: i64,
-        available: i64,
-    },
-
     /// A dependency failed, not us. Kept distinct from `Internal` so an
     /// upstream outage is diagnosable from the status code alone.
     #[error("{0}")]
     Upstream(String),
+
+    /// Upstream `402`: the order costs more than the balance. Carries
+    /// upstream's own wording for the log and for detail; the frontend renders
+    /// its own sentence off the `insufficient_balance` code.
+    #[error("{0}")]
+    InsufficientBalance(String),
 
     #[error("something went wrong")]
     Database(#[from] sqlx::Error),
@@ -57,9 +50,8 @@ impl ApiError {
             ApiError::InvalidCredentials => "invalid_credentials",
             ApiError::NotFound(_) => "not_found",
             ApiError::Conflict(_) => "conflict",
-            ApiError::InsufficientBudget { .. } => "insufficient_budget",
-            ApiError::InsufficientStock { .. } => "insufficient_stock",
             ApiError::Upstream(_) => "upstream_error",
+            ApiError::InsufficientBalance(_) => "insufficient_balance",
             ApiError::Database(_) | ApiError::Internal(_) => "internal",
         }
     }
@@ -79,9 +71,7 @@ impl ResponseError for ApiError {
             ApiError::NotFound(_) => StatusCode::NOT_FOUND,
             ApiError::Conflict(_) => StatusCode::CONFLICT,
             // 422: the request was well-formed but violates a business rule.
-            ApiError::InsufficientBudget { .. } | ApiError::InsufficientStock { .. } => {
-                StatusCode::UNPROCESSABLE_ENTITY
-            }
+            ApiError::InsufficientBalance(_) => StatusCode::UNPROCESSABLE_ENTITY,
             ApiError::Upstream(_) => StatusCode::BAD_GATEWAY,
             ApiError::Database(_) | ApiError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }

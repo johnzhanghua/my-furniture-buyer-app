@@ -1,5 +1,26 @@
 # Architecture
 
+> **Sections 2.3, 2.5 and 3.4 are superseded by the Step 5 API integration.**
+>
+> The system is now three tiers, not two: browser → our Rust API → the
+> furniture shop API (`https://day1.training.cognitivo.com.au`). Catalogue,
+> balance, and orders all live upstream; SQLite holds login accounts only.
+>
+> - **§2.3 "Order placement — the one piece of real logic" no longer exists.**
+>   The local transaction that enforced budget and stock is deleted;
+>   `routes/orders.rs` forwards to upstream and maps its errors.
+> - **§2.5 "Persistence"** — `products`, `orders`, and `order_items` are dead
+>   tables. Only `users` is used, and its `budget_cents` column is no longer
+>   read or written.
+> - **§3.4 "The budget, shown three ways"** — there is one balance, read from
+>   upstream, and no cart.
+> - **DD-1 (integer cents) survives** but gained a boundary: upstream speaks
+>   floats, converted once in `external_api::to_cents`, inbound only.
+>
+> Still accurate: §1 trust boundary, §2.1 module layout, §2.2 auth, §2.4 error
+> model (plus `insufficient_balance` and `upstream_error`), §5 design
+> decisions, §6 configuration. [CLAUDE.md](CLAUDE.md) is the current reference.
+
 How the furniture buyer's app is put together, and why. Requirement IDs (FR-…,
 NFR-…, BR-…, LIM-…) refer to [requirements.md](requirements.md).
 
@@ -341,6 +362,12 @@ costs more than the four screens are worth.
 | `DEFAULT_BUDGET_CENTS` | `500000` | Budget granted at registration (FR-1.2). |
 | `RUST_LOG` | `info` | Log filter. |
 | `VITE_API_BASE_URL` | `/api` | Frontend API base; `/api` uses the dev proxy. |
+| `EXTERNAL_API_BASE_URL` | *(empty)* | Upstream hackathon API. Empty disables the integration. |
+| `EXTERNAL_API_USER_ID` | *(empty)* | Participant id issued by the organisers. |
+| `EXTERNAL_API_KEY` | *(empty)* | Participant API key. **Secret — `.env` only.** |
+| `EXTERNAL_API_KEY_HEADER` | `X-API-Key` | Header carrying the key; configurable because the scheme is unconfirmed. |
+| `EXTERNAL_API_USER_HEADER` | `X-User-Id` | Header carrying the participant id. |
+| `EXTERNAL_API_TIMEOUT_SECS` | `10` | Upstream request timeout. |
 
 `.env` is gitignored; `.env.example` is committed and must gain an entry
 whenever a variable is added (NFR-7).

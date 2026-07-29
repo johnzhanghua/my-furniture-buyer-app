@@ -32,7 +32,7 @@ pub async fn init_pool(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
 
 /// Inserts the demo buyer if it is not already present. Idempotent, so it is
 /// safe to run on every boot.
-pub async fn seed_demo_user(pool: &SqlitePool, budget_cents: i64) -> Result<(), ApiError> {
+pub async fn seed_demo_user(pool: &SqlitePool) -> Result<(), ApiError> {
     let existing: Option<(String,)> = sqlx::query_as("SELECT id FROM users WHERE email = ?")
         .bind(DEMO_EMAIL)
         .fetch_optional(pool)
@@ -43,14 +43,13 @@ pub async fn seed_demo_user(pool: &SqlitePool, budget_cents: i64) -> Result<(), 
     }
 
     sqlx::query(
-        "INSERT INTO users (id, email, display_name, password_hash, budget_cents, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO users (id, email, display_name, password_hash, created_at)
+         VALUES (?, ?, ?, ?, ?)",
     )
     .bind(uuid::Uuid::new_v4().to_string())
     .bind(DEMO_EMAIL)
     .bind("Demo Buyer")
     .bind(hash_password(DEMO_PASSWORD)?)
-    .bind(budget_cents)
     .bind(chrono::Utc::now().to_rfc3339())
     .execute(pool)
     .await?;

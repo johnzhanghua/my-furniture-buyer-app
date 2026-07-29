@@ -4,7 +4,6 @@ import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App";
 import { AuthProvider } from "./state/AuthContext";
-import { CartProvider } from "./state/CartContext";
 import "./index.css";
 
 const container = document.getElementById("root");
@@ -16,9 +15,7 @@ createRoot(container).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <CartProvider>
-          <App />
-        </CartProvider>
+        <App />
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

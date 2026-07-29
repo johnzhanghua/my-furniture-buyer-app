@@ -1,5 +1,29 @@
 # Requirements
 
+> **Substantially superseded by the Step 5 API integration.**
+>
+> This document describes the app as originally built, where budget and stock
+> were enforced locally in our own database. The furniture shop API is now the
+> source of truth for catalogue, balance, and orders. Specifically:
+>
+> - **BR-1, BR-2, BR-3 (budget ceiling, stock floor, all-or-nothing) are no
+>   longer enforced by us.** Upstream debits the balance as part of placing the
+>   order. Our transaction is gone.
+> - **BR-4 (server-priced) still holds**, and more strongly: the order request
+>   carries only `item_id` and `quantity`.
+> - **BR-6 (tenancy) no longer holds as written.** There is one upstream
+>   account and one API key, so every local login shares one balance and one
+>   order history.
+> - **FR-2.6 / FR-2.6a (seeded furniture-only catalogue) are moot** — the
+>   catalogue is upstream's 762 items across 17 categories.
+> - **FR-3.x (cart) is withdrawn.** Step 5 specifies a per-product Buy button.
+> - **FR-5.1–5.5 (budget)** are replaced by a real balance read from upstream's
+>   ledger.
+> - New: ordering is idempotent by key, so a double-click cannot charge twice.
+>
+> [CLAUDE.md](CLAUDE.md) describes the current design. The sections below are
+> kept for the reasoning and the limitation list, much of which still applies.
+
 Scope for the Day 1 hackathon build of the furniture buyer's app. Requirement
 IDs are referenced from [architecture.md](architecture.md).
 

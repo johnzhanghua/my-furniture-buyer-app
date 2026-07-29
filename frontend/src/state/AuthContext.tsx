@@ -9,11 +9,12 @@ import {
 } from "react";
 
 import { api, getToken, setToken, setUnauthorizedHandler } from "../api/client";
-import type { Budget, User } from "../api/types";
+import type { Balance, User } from "../api/types";
 
 interface AuthContextValue {
   user: User | null;
-  budget: Budget | null;
+  /** Real balance from the furniture shop ledger; null until loaded. */
+  balance: Balance | null;
   /** True until the initial token check resolves; gates route rendering. */
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -23,37 +24,44 @@ interface AuthContextValue {
     displayName?: string,
   ) => Promise<void>;
   logout: () => void;
-  /** Re-reads the budget after an order is placed. */
-  refreshBudget: () => Promise<void>;
+  refreshBalance: () => Promise<void>;
+  /** Applied straight from an order response, avoiding a second round trip. */
+  setBalanceCents: (cents: number) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [budget, setBudget] = useState<Budget | null>(null);
+  const [balance, setBalance] = useState<Balance | null>(null);
   const [loading, setLoading] = useState(true);
 
   const logout = useCallback(() => {
     setToken(null);
     setUser(null);
-    setBudget(null);
+    setBalance(null);
   }, []);
 
-  const refreshBudget = useCallback(async () => {
+  const refreshBalance = useCallback(async () => {
     try {
-      setBudget(await api.budget());
+      setBalance(await api.balance());
     } catch {
-      // A stale budget is not worth blocking the UI over; the 401 path in the
+      // A stale balance is not worth blocking the UI over; the 401 path in the
       // API client already handles an expired session.
     }
+  }, []);
+
+  const setBalanceCents = useCallback((cents: number) => {
+    setBalance((current) =>
+      current ? { ...current, balance_cents: cents } : current,
+    );
   }, []);
 
   // Restore a persisted session on boot.
   useEffect(() => {
     setUnauthorizedHandler(() => {
       setUser(null);
-      setBudget(null);
+      setBalance(null);
     });
 
     if (!getToken()) {
@@ -64,19 +72,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        const [me, currentBudget] = await Promise.all([api.me(), api.budget()]);
-        if (!cancelled) {
-          setUser(me);
-          setBudget(currentBudget);
+        const me = await api.me();
+        if (!cancelled) setUser(me);
+        // Balance is fetched separately: an upstream outage must not log the
+        // user out of an otherwise working app.
+        try {
+          const current = await api.balance();
+          if (!cancelled) setBalance(current);
+        } catch {
+          /* leave balance null; the header shows a dash */
         }
       } catch {
-        if (!cancelled) {
-          setToken(null);
-        }
+        if (!cancelled) setToken(null);
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     })();
 
@@ -89,9 +98,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (auth: { token: string; user: User }) => {
       setToken(auth.token);
       setUser(auth.user);
-      await refreshBudget();
+      await refreshBalance();
     },
-    [refreshBudget],
+    [refreshBalance],
   );
 
   const login = useCallback(
@@ -109,8 +118,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ user, budget, loading, login, register, logout, refreshBudget }),
-    [user, budget, loading, login, register, logout, refreshBudget],
+    () => ({
+      user,
+      balance,
+      loading,
+      login,
+      register,
+      logout,
+      refreshBalance,
+      setBalanceCents,
+    }),
+    [
+      user,
+      balance,
+      loading,
+      login,
+      register,
+      logout,
+      refreshBalance,
+      setBalanceCents,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

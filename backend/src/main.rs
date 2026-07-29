@@ -25,7 +25,7 @@ async fn main() -> std::io::Result<()> {
         .await
         .map_err(|e| std::io::Error::other(format!("database setup failed: {e}")))?;
 
-    db::seed_demo_user(&pool, config.default_budget_cents)
+    db::seed_demo_user(&pool)
         .await
         .map_err(|e| std::io::Error::other(format!("seeding failed: {e}")))?;
 

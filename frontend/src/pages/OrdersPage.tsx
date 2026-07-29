@@ -20,9 +20,11 @@ export function OrdersPage() {
       .catch((err) => {
         if (!cancelled) {
           setError(
-            err instanceof ApiError
-              ? err.message
-              : "Could not load your orders.",
+            err instanceof ApiError && err.code === "upstream_error"
+              ? "The furniture shop is unavailable right now. Please try again in a moment."
+              : err instanceof ApiError
+                ? err.message
+                : "Could not load your orders.",
           );
         }
       })
@@ -58,25 +60,28 @@ export function OrdersPage() {
       <h1>Orders</h1>
 
       {orders.map((order) => (
-        <article key={order.id} className="panel order">
+        <article key={order.order_id} className="panel order">
           <header className="order-header">
             <div>
-              <strong>{formatDate(order.created_at)}</strong>
-              <div className="muted">#{order.id.slice(0, 8)}</div>
+              <strong>
+                {order.timestamp ? formatDate(order.timestamp) : "Order"}
+              </strong>
+              <div className="muted">#{order.order_id.slice(0, 12)}</div>
             </div>
             <div className="order-total">
-              <span className="tag">{order.status}</span>
               <strong>{formatCents(order.total_cents)}</strong>
             </div>
           </header>
 
           <table className="table">
             <tbody>
-              {order.items.map((item) => (
-                <tr key={item.product_id}>
+              {order.items.map((item, index) => (
+                <tr key={`${item.item_id}-${index}`}>
                   <td>
-                    {item.name}
-                    <div className="muted">{item.sku}</div>
+                    {item.product_name ?? item.item_id}
+                    {item.product_name && (
+                      <div className="muted">{item.item_id}</div>
+                    )}
                   </td>
                   <td className="muted">
                     {item.quantity} × {formatCents(item.unit_price_cents)}

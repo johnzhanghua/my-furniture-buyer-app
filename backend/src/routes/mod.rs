@@ -18,8 +18,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(
                 web::scope("/me")
                     .route("", web::get().to(me::profile))
-                    .route("/budget", web::get().to(me::budget)),
+                    .route("/balance", web::get().to(me::balance)),
             )
+            .route("/categories", web::get().to(products::categories))
             .service(
                 web::scope("/products")
                     .route("", web::get().to(products::list))
@@ -28,12 +29,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(
                 web::scope("/orders")
                     .route("", web::post().to(orders::create))
-                    .route("", web::get().to(orders::list))
-                    .route("/{id}", web::get().to(orders::detail)),
+                    .route("", web::get().to(orders::list)),
             )
-            .service(
-                web::scope("/upstream").route("/status", web::get().to(upstream::status)),
-            ),
+            .service(web::scope("/upstream").route("/status", web::get().to(upstream::status))),
     );
 }
 
