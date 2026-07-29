@@ -1,0 +1,20 @@
+# Environment
+.env
+.env.local
+
+# Rust
+backend/target/
+backend/*.db
+backend/*.db-shm
+backend/*.db-wal
+
+# Node
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
+yarn-error.log*
+
+# Editors / OS
+.DS_Store
+.idea/
+*.swp
